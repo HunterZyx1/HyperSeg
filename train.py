@@ -389,9 +389,8 @@ def main() -> None:
                 bound_f1s,
             ]
 
-        tmp_df = pd.DataFrame(tmp, index=log.columns).T
-        log = pd.concat([log, tmp_df], ignore_index=True)
-        log.to_csv(os.path.join(result_path, "log.csv"))
+        log.loc[len(log)] = tmp
+        log.to_csv(os.path.join(result_path, "log.csv"), index=False)
 
         val_time = (time.time() - start) / 60
 
