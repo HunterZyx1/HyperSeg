@@ -109,7 +109,7 @@ class PostProcessor(object):
                 the model output for frame-level class prediction.
             boundaries: numpy array.  shape (N, 1, T)
                 boundary prediction.
-            masks: np.array. np.bool. shape (N, 1, T)
+            masks: np.array. bool. shape (N, 1, T)
                 valid length for each video
         Return:
             preds: np.array. shape (N, T)

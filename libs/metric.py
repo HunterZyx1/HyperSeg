@@ -303,9 +303,9 @@ def argrelmax(prob: np.ndarray, threshold: float = 0.7) -> List[int]:
     # treat the first frame as boundary
     peak = np.concatenate(
         [
-            np.ones((1), dtype=np.bool),
+            np.ones((1), dtype=bool),
             (prob[:-2] < prob[1:-1]) & (prob[2:] < prob[1:-1]),
-            np.zeros((1), dtype=np.bool),
+            np.zeros((1), dtype=bool),
         ],
         axis=0,
     )
@@ -333,7 +333,7 @@ class BoundaryScoreMeter(object):
         Args:
             preds: np.array. the model output(N, T)
             gts: np.array. boudnary ground truth array (N, T)
-            masks: np.array. np.bool. valid length for each video (N, T)
+            masks: np.array. bool. valid length for each video (N, T)
         Return:
             Accuracy
             Boundary F1 Score
