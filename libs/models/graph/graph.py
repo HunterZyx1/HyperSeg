@@ -1,9 +1,6 @@
 # import tools
 from ..graph import tools
 
-import matplotlib 
-matplotlib.use('Agg') 
-
 class Graph:
     def __init__(self, labeling_mode='spatial', layout='MCFS-22'):
 
@@ -79,5 +76,4 @@ if __name__ == '__main__':
     #     plt.show()
     # plt.savefig("./10.jpg")
     # # print(A)
-
 

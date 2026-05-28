@@ -3,7 +3,17 @@ import os
 
 import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose
+try:
+    from torchvision.transforms import Compose
+except ImportError:
+    class Compose:
+        def __init__(self, transforms):
+            self.transforms = transforms
+
+        def __call__(self, data):
+            for transform in self.transforms:
+                data = transform(data)
+            return data
 
 from libs import models
 from libs.class_id_map import get_n_classes
@@ -148,9 +158,6 @@ def main():
         SFI_layer=config.SFI_layer,
         dataset=config.dataset,
         node=config.node,
-        dof=config.dof,
-        num_people=config.num_people,
-        use_Friction=config.use_Friction,
     )
 
     # send the model to cuda/cpu

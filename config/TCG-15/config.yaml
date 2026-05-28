@@ -25,13 +25,7 @@ tmse_weight: 0.15
 tolerance: 5
 
 node: 17
-dof: 42
-num_people: 1
-use_Friction: True
-ECloss_start_epoch: 50
-ECloss_weight: 0.0005
-
-model: libs.models.HyperSeg.Model
+model: libs.models.StrongDeST.Model
 in_channel: 6
 n_features: 64
 n_layers: 10

@@ -71,15 +71,6 @@ class Config:
     refinement_method: str = "refinement_with_boundary"
 
     node: int = 19
-    dof: int = 48
-    num_people: int = 1
-    use_Friction: bool = False
-    ECloss_start_epoch: int = 10
-    ECloss_weight: float = 0.01
-
-
-    ECloss_start_epoch: int = 0
-    ECloss_weight: float = 0.1
 
     def __post_init__(self) -> None:
         self._type_check()

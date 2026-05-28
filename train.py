@@ -7,7 +7,17 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose
+try:
+    from torchvision.transforms import Compose
+except ImportError:
+    class Compose:
+        def __init__(self, transforms):
+            self.transforms = transforms
+
+        def __call__(self, data):
+            for transform in self.transforms:
+                data = transform(data)
+            return data
 
 from libs.checkpoint import resume, save_checkpoint
 from libs.class_id_map import get_n_classes
@@ -18,7 +28,6 @@ from libs.helper import train, validate
 from libs.loss_fn import ActionSegmentationLoss, BoundaryRegressionLoss, KLLoss
 from libs.optimizer import get_optimizer
 from libs.transformer import TempDownSamp, ToTensor
-from libs.loss_fn.ECloss import EnergyConsistencyLoss
 
 def get_arguments() -> argparse.Namespace:
     """
@@ -168,7 +177,7 @@ def main() -> None:
     joint_embeddings_distance_normalized = (joint_embedding_distance - joint_embedding_distance.min())/(joint_embedding_distance.max() - joint_embedding_distance.min())
     joint_embeddings_graph = 1 - joint_embeddings_distance_normalized
 
-    Model = import_class(config.model) #'libs.models.LaDy.Model'
+    Model = import_class(config.model)
 
     model = Model(
         in_channel=config.in_channel,
@@ -182,9 +191,6 @@ def main() -> None:
         SFI_layer=config.SFI_layer, #{1,2,3,4,5,6,7,8,9}
         dataset=config.dataset,
         node=config.node,
-        dof=config.dof,
-        num_people=config.num_people,
-        use_Friction=config.use_Friction,
     )
 
     # send the model to cuda/cpu
@@ -268,7 +274,6 @@ def main() -> None:
     criterion_bound = BoundaryRegressionLoss(pos_weight=pos_weight) #bce-loss for boundary regression
     criterion_contrast = KLLoss().cuda(device)  # action-text contrastive loss
     criterion_mse = torch.nn.MSELoss()
-    criterion_energy = EnergyConsistencyLoss(warmup_steps=300)       # ECloss (work-energy theorem)
 
     # train and validate model
     print("---------- Start training ----------")
@@ -294,14 +299,10 @@ def main() -> None:
             criterion_bound,
             criterion_contrast,
             criterion_mse,
-            criterion_energy,
             config.lambda_b,
             optimizer,
             device,
             dataset_name,
-            epoch,
-            config.ECloss_start_epoch,
-            config.ECloss_weight,
         ) #读取的函数
         train_time = (time.time() - start) / 60
 

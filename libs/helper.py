@@ -13,7 +13,6 @@ from libs.postprocess import PostProcessor
 from tqdm import tqdm
 
 from tools import segment_video_labels, gen_label, generate_segment_features, create_logits
-from libs.generalized_coordinates import generate_generalized_coordinates
 
 
 def train(
@@ -26,14 +25,10 @@ def train(
     criterion_bound: nn.Module,
     criterion_contrast: nn.Module,
     criterion_mse: nn.Module,
-    criterion_energy: nn.Module,
     lambda_bound_loss: float,
     optimizer: optim.Optimizer,
     device: str,
     dataset: str,
-    epoch: str,
-    ECloss_start_epoch: int,
-    ECloss_weight: float,
 ) -> float:
     losses = AverageMeter("Loss", ":.4e")
 
@@ -53,10 +48,12 @@ def train(
 
         batch_size = x.shape[0]
 
-        x_generalized = generate_generalized_coordinates(x, dataset=dataset)
-
         # compute output and loss
-        output_cls, output_bound, output_feature, dyn_outputs, logit_scale = model(x, x_generalized, mask, joint_embeddings_graph)
+        output_cls, output_bound, output_feature, logit_scale = model(
+            x,
+            mask,
+            joint_embeddings_graph,
+        )
 
         # action-text contrastive
         t_segment = segment_video_labels(t)
@@ -102,12 +99,6 @@ def train(
             loss_texts = criterion_contrast(logits_per_text, ground_truth)
 
             loss += 0.8 * ((loss_imgs + loss_texts) / 2)
-
-
-        if epoch > ECloss_start_epoch:
-            energy_loss = criterion_energy(dyn_outputs["M"], dyn_outputs["G"], dyn_outputs["F"], dyn_outputs["tau_hat"],
-                                               dyn_outputs["q_dot"])
-            loss += ECloss_weight * energy_loss
 
 
         # record loss
@@ -167,10 +158,12 @@ def validate(
 
             batch_size = x.shape[0]
 
-            x_generalized = generate_generalized_coordinates(x, dataset=dataset)
-
             # compute output and loss
-            output_cls, output_bound = model(x, x_generalized, mask, joint_embeddings_graph)
+            output_cls, output_bound = model(
+                x,
+                mask,
+                joint_embeddings_graph,
+            )
 
             loss = 0.0
             loss += criterion_cls(output_cls, t, x)
@@ -254,9 +247,12 @@ def evaluate(
             mask = mask.to(device)
 
             # compute output and loss
-            x_generalized = generate_generalized_coordinates(x, dataset=dataset)
             # compute output and loss
-            output_cls, output_bound = model(x, x_generalized, mask, joint_embeddings_graph)
+            output_cls, output_bound = model(
+                x,
+                mask,
+                joint_embeddings_graph,
+            )
 
             # calcualte accuracy and f1 score
             output_cls = output_cls.to("cpu").data.numpy()

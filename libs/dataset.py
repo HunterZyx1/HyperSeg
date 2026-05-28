@@ -1,12 +1,11 @@
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from torchvision.transforms.transforms import Compose
 
 import math
 
@@ -64,7 +63,7 @@ class ActionSegmentationDataset(Dataset):
     def __init__(
         self,
         dataset: str,
-        transform: Optional[Compose] = None,
+        transform: Optional[Callable] = None,
         mode: str = "training",
         split: int = 1,
         dataset_dir: str = "./dataset",
@@ -75,7 +74,7 @@ class ActionSegmentationDataset(Dataset):
         """
             Args:
                 dataset: the name of dataset
-                transform: torchvision.transforms.Compose([...])
+                transform: callable transform pipeline
                 mode: training, validation, test
                 split: which split of train, val and test do you want to use in csv files.(default:1)
                 csv_dir: the path to the directory where the csv files are saved
