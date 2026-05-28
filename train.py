@@ -47,6 +47,12 @@ def get_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--resume", action="store_true", help="Add --resume option if you start training from checkpoint.",
     )
+    parser.add_argument(
+        "--split",
+        type=int,
+        default=1,
+        help="Split number to use.",
+    )
 
     return parser.parse_args()
 
@@ -80,6 +86,8 @@ def main() -> None:
     embedding_type = 'pool'
     # configuration
     config = get_config(f"config/{dataset_name}/config.yaml")  # get config.yaml
+    config.split = args.split
+    print(f"Using dataset: {config.dataset}, split: {config.split}")
 
     # './result/LARA/split1'
     result_path = os.path.join(args.result_path, config.dataset, 'split' + str(config.split))
@@ -88,7 +96,10 @@ def main() -> None:
     print('result_path:',result_path) #'./result/LARA/DeST_tcn/split1'
     if not os.path.exists(result_path):
         os.makedirs(result_path)
-    with open(f'{result_path}/scores.txt', "w") as file:
+    scores_mode = "a+" if args.resume else "w"
+    with open(f'{result_path}/scores.txt', scores_mode) as file:
+        if args.resume:
+            file.write("Resume training from checkpoint.\n")
         file.write(f'The result printed:\n')
 
     seed = args.seed
@@ -230,9 +241,25 @@ def main() -> None:
     # ['epoch', 'lr', 'train_loss', 'val_loss', 'cls_acc', 'edit', 'f1s@0.1', 'f1s@0.25', 'f1s@0.5', 'f1s@0.75', 'f1s@0.9', 'bound_acc', 'precision', 'recall', 'bound_f1s'] [Columns: [epoch, lr, train_loss, val_loss, cls_acc, edit, f1s@0.1, f1s@0.25, f1s@0.5, f1
     if args.resume: # checkpoint
         if os.path.exists(os.path.join(result_path, "checkpoint.pth")):
-            checkpoint = resume(result_path, model, optimizer)
-            begin_epoch, model, optimizer, best_loss = checkpoint
-            log = pd.read_csv(os.path.join(result_path, "log.csv"))
+            checkpoint = resume(result_path, model, optimizer, device)
+            (
+                begin_epoch,
+                model,
+                optimizer,
+                best_loss,
+                ckpt_best_acc,
+                ckpt_best_f1_10,
+                ckpt_best_f1_50,
+            ) = checkpoint
+            if ckpt_best_acc is not None:
+                best_test_acc = ckpt_best_acc
+            if ckpt_best_f1_10 is not None:
+                best_test_F1_10 = ckpt_best_f1_10
+            if ckpt_best_f1_50 is not None:
+                best_test_F1_50 = ckpt_best_f1_50
+            log_path = os.path.join(result_path, "log.csv")
+            if os.path.exists(log_path):
+                log = pd.read_csv(log_path)
             print("training will start from {} epoch".format(begin_epoch))
         else:
             print("there is no checkpoint at the result folder")
@@ -369,7 +396,16 @@ def main() -> None:
                     )
  
         # save checkpoint every epoch
-        save_checkpoint(result_path, epoch, model, optimizer, best_loss) #save .pth（contains epoch, model, optimizer, best_loss）
+        save_checkpoint(
+            result_path,
+            epoch,
+            model,
+            optimizer,
+            best_loss,
+            best_test_acc=best_test_acc,
+            best_test_F1_10=best_test_F1_10,
+            best_test_F1_50=best_test_F1_50,
+        ) #save .pth（contains epoch, model, optimizer, best_loss）
 
         # write logs to dataframe and csv file
         tmp = [epoch, optimizer.param_groups[0]["lr"], train_loss]
@@ -419,7 +455,9 @@ def main() -> None:
 
 
     # delete checkpoint
-    os.remove(os.path.join(result_path, "checkpoint.pth"))
+    checkpoint_path = os.path.join(result_path, "checkpoint.pth")
+    if os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
 
     print('\n---------------------------best_test_acc---------------------------\n')
     print('{}'.format(best_test_acc))
