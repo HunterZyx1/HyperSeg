@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from scipy.special import expit
 
 from .metric import argrelmax
 from .transformer import GaussianSmoothing
@@ -77,7 +78,7 @@ class PostProcessor(object):
         else:
             if x.shape[1] == 1: #regression
                 # sigmoid
-                prob = 1 / (1 + np.exp(-x))
+                prob = expit(x)
             else: #cls
                 # softmax
                 prob = np.exp(x) / np.sum(np.exp(x), axis=1) #softmax
