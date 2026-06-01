@@ -17,6 +17,10 @@ class Config:
     n_stages_asb: int = 4
     n_stages_brb: int = 4
     SFI_layer: Tuple[int, ...] = (1, 2 ,3, 4, 5, 6, 7, 8, 9)
+    hyper_k: int = 5
+    hyper_hidden: int = 16
+    hyper_dropout: float = 0.0
+    hyper_alpha_init: float = 0.1
 
     # loss function
     ce: bool = True  # cross entropy

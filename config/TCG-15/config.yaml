@@ -28,6 +28,10 @@ node: 17
 model: libs.models.StrongDeST.Model
 in_channel: 6
 n_features: 64
+hyper_k: 5
+hyper_hidden: 16
+hyper_dropout: 0.0
+hyper_alpha_init: 0.1
 n_layers: 10
 n_stages: 4
 n_stages_asb: 2

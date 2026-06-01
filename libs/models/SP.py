@@ -16,7 +16,11 @@ class MultiScale_GraphConv(nn.Module):
                  disentangled_agg=True,
                  use_mask=True,
                  dropout=0,
-                 activation='relu'):
+                 activation='relu',
+                 hyper_k=5,
+                 hyper_hidden=16,
+                 hyper_dropout=0.0,
+                 hyper_alpha_init=0.1):
         super().__init__()
 
         self.graph = Graph(labeling_mode='spatial', layout=dataset)
@@ -26,8 +30,8 @@ class MultiScale_GraphConv(nn.Module):
         A_binary = get_adjacency_matrix(neighbor, node)
 
         if disentangled_agg:  # 13跳卷积图
-            A_powers = [k_adjacency(A_binary, k, with_self=True) for k in range(num_scales)]  # 13 （V，V）
-            A_powers = np.concatenate([normalize_adjacency_matrix(g) for g in A_powers])  # （13×V，V）
+            A_powers = [k_adjacency(A_binary, k, with_self=True) for k in range(num_scales)]
+            A_powers = np.concatenate([normalize_adjacency_matrix(g) for g in A_powers])
         else:
             A_powers = [A_binary + np.eye(len(A_binary)) for k in range(num_scales)]
             A_powers = [normalize_adjacency_matrix(g) for g in A_powers]
@@ -44,12 +48,19 @@ class MultiScale_GraphConv(nn.Module):
         self.mlp = MLP(in_channels * num_scales, [out_channels], dropout=dropout, activation=activation)
 
         self.CTRGCN = CTRGC(out_channels, out_channels)
+        self.hyper_branch = AdaptiveHyperGraphBranch(
+            channels=out_channels,
+            hidden_channels=hyper_hidden,
+            k=hyper_k,
+            dropout=hyper_dropout,
+        )
+        self.hyper_alpha = nn.Parameter(torch.tensor(float(hyper_alpha_init)))
         self.alpha = nn.Parameter(torch.zeros(1))
         self.beta = nn.Parameter(torch.zeros(1))
         self.bn = nn.BatchNorm2d(out_channels)
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, x, joint_graph):
+    def forward(self, x, joint_graph, mask=None):
         x = x.transpose(2, 3)  # n,c,v,t->n,c,t,v
         N, C, T, V = x.shape
         self.A_powers = self.A_powers.to(x.device)  # (13*v,v)
@@ -59,16 +70,75 @@ class MultiScale_GraphConv(nn.Module):
             A = A + self.A_res.to(x.dtype)
 
         support = torch.einsum('vu,nctu->nctv', A, x)
-        support = support.view(N, C, T, self.num_scales, V)  # （n,c,t,13,v）
-        support = support.permute(0, 3, 1, 2, 4).contiguous().view(N, self.num_scales * C, T, V)  ##（n,13*c,t,v）
-        x = self.mlp(support) #（n,c,t,v）
+        support = support.view(N, C, T, self.num_scales, V)
+        support = support.permute(0, 3, 1, 2, 4).contiguous().view(N, self.num_scales * C, T, V)
 
-        out = self.CTRGCN(x, joint_graph, self.A_binary, self.alpha, self.beta)
+        x_base = self.mlp(support)
+        x_hyper = self.hyper_branch(x_base, mask=mask)
+
+        out = self.CTRGCN(x_base, joint_graph, self.A_binary, self.alpha, self.beta)
         out = self.bn(out)
-        out = out + x
+
+        out = out + x_base + self.hyper_alpha * x_hyper
         out = self.relu(out)
 
         return out
+
+
+class AdaptiveHyperGraphBranch(nn.Module):
+    def __init__(self, channels, hidden_channels=16, k=5, dropout=0.0):
+        super().__init__()
+        self.channels = channels
+        self.hidden_channels = hidden_channels
+        self.k = k
+        self.embed = nn.Sequential(
+            nn.Linear(channels, hidden_channels),
+            nn.LayerNorm(hidden_channels),
+            nn.ReLU(inplace=True),
+        )
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+        self.out_proj = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(channels),
+        )
+
+    def forward(self, x, mask=None):
+        eps = 1e-6
+        B, C, T, V = x.shape
+
+        if mask is not None:
+            mask_float = mask.float().unsqueeze(-1)
+            x_pool = (x * mask_float).sum(dim=2) / (mask_float.sum(dim=2) + eps)
+            x_pool = x_pool.transpose(1, 2).contiguous()
+        else:
+            x_pool = x.mean(dim=2).transpose(1, 2).contiguous()
+
+        z = self.embed(x_pool)
+        z = self.dropout(z)
+
+        dist = torch.cdist(z, z, p=2)
+        K = min(self.k, V)
+        topk_dist, topk_idx = torch.topk(dist, k=K, dim=-1, largest=False)
+        prob = torch.softmax(-topk_dist, dim=-1)
+
+        H_ej = torch.zeros(B, V, V, device=x.device, dtype=x.dtype)
+        H_ej.scatter_(dim=-1, index=topk_idx, src=prob)
+
+        H = H_ej.transpose(1, 2).contiguous()
+
+        deg_v = H.sum(dim=-1) + eps
+        deg_e = H.sum(dim=1) + eps
+
+        H_de = H / deg_e.unsqueeze(1)
+        A_h = torch.bmm(H_de, H.transpose(1, 2))
+        A_h = A_h / deg_v.unsqueeze(-1)
+        A_h = torch.nan_to_num(A_h, nan=0.0, posinf=0.0, neginf=0.0)
+
+        x_h = torch.einsum("buv,bctv->bctu", A_h, x)
+        x_h = self.out_proj(x_h)
+        x_h = torch.nan_to_num(x_h, nan=0.0, posinf=0.0, neginf=0.0)
+
+        return x_h
 
 
 class CTRGC(nn.Module):

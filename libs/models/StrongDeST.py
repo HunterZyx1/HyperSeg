@@ -222,7 +222,17 @@ class Model(nn.Module):
         self.in_channel = in_channel
         self.logit_scale = nn.Parameter(torch.ones(1) * np.log(1 / 0.07))
 
-        self.SP = MultiScale_GraphConv(13, in_channel, n_features, dataset, node)
+        self.SP = MultiScale_GraphConv(
+            13,
+            in_channel,
+            n_features,
+            dataset,
+            node,
+            hyper_k=kwargs.get("hyper_k", 5),
+            hyper_hidden=kwargs.get("hyper_hidden", 16),
+            hyper_dropout=kwargs.get("hyper_dropout", 0.0),
+            hyper_alpha_init=kwargs.get("hyper_alpha_init", 0.1),
+        )
         self.STI = STI_NoDyn(
             node=node,
             in_channel=n_features,
@@ -259,7 +269,7 @@ class Model(nn.Module):
         self.activation_brb = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor, joint_graph):
-        spatial_feature = self.SP(x, joint_graph) * mask.unsqueeze(3)
+        spatial_feature = self.SP(x, joint_graph, mask=mask) * mask.unsqueeze(3)
         feature = self.STI(spatial_feature, mask)
 
         out_cls = self.conv_cls(feature)

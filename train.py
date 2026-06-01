@@ -202,6 +202,10 @@ def main() -> None:
         SFI_layer=config.SFI_layer, #{1,2,3,4,5,6,7,8,9}
         dataset=config.dataset,
         node=config.node,
+        hyper_k=config.hyper_k,
+        hyper_hidden=config.hyper_hidden,
+        hyper_dropout=config.hyper_dropout,
+        hyper_alpha_init=config.hyper_alpha_init,
     )
 
     # send the model to cuda/cpu
