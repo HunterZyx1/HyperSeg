@@ -39,6 +39,12 @@ def get_arguments():
     parser.add_argument("--result_path", type=str, default="./result", help="path of a result")
     parser.add_argument("--cuda", type=int, default=2, help="cuda id")
     parser.add_argument(
+        "--split",
+        type=int,
+        default=1,
+        help="Split number to use.",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default=None,
@@ -76,6 +82,8 @@ def main():
     embedding_type = 'pool'
     # configuration
     config = get_config(f"config/{dataset_name}/config.yaml")  # get config.yaml
+    config.split = args.split
+    print(f"Using dataset: {config.dataset}, split: {config.split}")
 
     # './result/LARA/split1'
     result_path = os.path.join(args.result_path, config.dataset, 'split' + str(config.split))
